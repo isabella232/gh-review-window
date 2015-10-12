@@ -1,4 +1,4 @@
-## Github Review Window
+# Github Review Window
 
 A GitHub Webhook Implementation
 
@@ -23,12 +23,21 @@ Where `OPTIONS` include:
 For the syntax of period strings, see the [`java.time.Duration` javadoc][javadoc duration].
 
 This is a subset of Spring Boot's autoconfiguration,
-see the list of [common application properties][properties] for other supported configuration options
+see the list of [common application properties][properties] for other supported configuration options.
 
 Example:
 ```sh
 $ mvn spring-boot:run -Dduration=P2D
 ```
+
+## Oauth
+
+In order to give Review Window the ability to add commit statuses, you need to specify
+credentials that it can use to access those.
+
+ - Generate an Oauth token that gives `repo:status` access.
+ - Add it to your environment or `~/.github` file as `github_oauth`.
+
 
 [javadoc duration]: http://docs.oracle.com/javase/8/docs/api/java/time/Duration.html
 [properties]: http://docs.spring.io/spring-boot/docs/current/reference/html/common-application-properties.html
