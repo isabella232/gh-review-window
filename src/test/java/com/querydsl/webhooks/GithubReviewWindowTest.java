@@ -1,6 +1,8 @@
 package com.querydsl.webhooks;
 
-import static org.hamcrest.CoreMatchers.is;
+import static com.jayway.restassured.RestAssured.given;
+import static com.jayway.restassured.http.ContentType.JSON;
+import static org.hamcrest.Matchers.is;
 
 import java.util.concurrent.CountDownLatch;
 
@@ -10,7 +12,6 @@ import org.junit.rules.ErrorCollector;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.*;
 import org.springframework.core.env.Environment;
-import org.springframework.http.*;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
@@ -28,39 +29,37 @@ public class GithubReviewWindowTest extends GithubReviewWindow {
     @Rule
     public final ErrorCollector errorCollector = new ErrorCollector();
 
-    private final TestRestTemplate restTemplate = new TestRestTemplate();
-
     @Test
     public void TestServerShouldStart() {
-        ResponseEntity<String> pingResponse = post("ping", "{\"zen\": \"all good!\"}");
-        errorCollector.checkThat("Server should be started",
-                pingResponse.getStatusCode(), is(HttpStatus.OK));
-        errorCollector.checkThat("Server should be started",
-                pingResponse.getBody(), is("all good!"));
+        String pingPayload
+                = "{\n"
+                + "    \"zen\": \"all good!\"\n"
+                + "}";
+
+        given().header("X-GitHub-Event", "ping")
+                .and().body(pingPayload).with().contentType(JSON)
+        .expect().statusCode(200)
+                .and().content(is("all good!"))
+        .when().post();
     }
 
     @Test
-    public void TestServerShouldStartAndAcceptPullRequests() throws InterruptedException {
-        ResponseEntity<String> pullRequestResponse = post("pull_request",
-                "{\n" +
-                "    \"action\": \"unlabeled\",\n" +
-                "    \"number\": 1,\n" +
-                "    \"pull_request\": {},\n" +
-                "    \"label\": {},\n" +
-                "    \"repository\": {},\n" +
-                "    \"sender\": {}\n" +
-                "}");
-        errorCollector.checkThat("Server should be started and accepting pull_request events",
-                pullRequestResponse.getStatusCode(), is(HttpStatus.OK));
+    public void TestServerShouldStartAndAcceptPullRequestEvents() throws InterruptedException {
+        String pullRequestPayload
+                = "{\n"
+                + "    \"action\": \"unlabeled\",\n"
+                + "    \"number\": 1,\n"
+                + "    \"pull_request\": {},\n"
+                + "    \"label\": {},\n"
+                + "    \"repository\": {},\n"
+                + "    \"sender\": {}\n"
+                + "}";
+
+        given().header("X-GitHub-Event", "pull_request")
+                .and().body(pullRequestPayload).with().contentType(JSON)
+        .expect().statusCode(200)
+        .when().post();
         completion.await();
-    }
-
-    private ResponseEntity<String> post(String event, String body) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("X-GitHub-Event", event);
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        return restTemplate.postForEntity("http://127.0.0.1:8080", new HttpEntity<>(body, headers), String.class);
     }
 
     @Override
