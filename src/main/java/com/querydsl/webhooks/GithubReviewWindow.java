@@ -20,6 +20,7 @@ import static java.time.ZonedDateTime.now;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Map;
@@ -39,6 +40,7 @@ import com.github.shredder121.gh_event_api.GHEventApiServer;
 import com.github.shredder121.gh_event_api.handler.pull_request.*;
 import com.github.shredder121.gh_event_api.model.PullRequest;
 import com.github.shredder121.gh_event_api.model.Ref;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Maps;
 
@@ -106,7 +108,7 @@ public class GithubReviewWindow {
                 if (windowPassed) {
                     completeAndCleanUp(asyncTasks, repository, head);
                 } else {
-                    createPendingMessage(repository, head);
+                    createPendingMessage(repository, head, reviewTime);
 
                     ScheduledFuture<?> scheduledTask = taskScheduler.schedule(
                             () -> completeAndCleanUp(asyncTasks, repository, head),
@@ -118,6 +120,28 @@ public class GithubReviewWindow {
                 throw Throwables.propagate(ex);
             }
         };
+    }
+
+    @VisibleForTesting
+    protected static String makeHumanReadable(Duration duration) {
+        StringBuilder output = new StringBuilder();
+        duration = truncateAndAppend(duration, duration.toDays(), ChronoUnit.DAYS, "day", output);
+        duration = truncateAndAppend(duration, duration.toHours(), ChronoUnit.HOURS, "hour", output);
+        duration = truncateAndAppend(duration, duration.toMinutes(), ChronoUnit.MINUTES, "minute", output);
+        duration = truncateAndAppend(duration, duration.getSeconds(), ChronoUnit.SECONDS, "second", output);
+        return output.toString().trim();
+    }
+
+    private static Duration truncateAndAppend(Duration duration, long amount, ChronoUnit unit,
+            String description, StringBuilder builder) {
+
+        if (amount > 0) {
+            builder.append(amount)
+                    .append(' ')
+                    .append(description)
+                    .append(' ');
+        }
+        return duration.minus(amount, unit);
     }
 
     private static void completeAndCleanUp(Map<String, ?> tasks, GHRepository repo, Ref head) {
@@ -139,8 +163,9 @@ public class GithubReviewWindow {
         createStatusMessage(repo, commit, GHCommitState.SUCCESS, "The review window has passed");
     }
 
-    private static void createPendingMessage(GHRepository repo, Ref commit) {
-        createStatusMessage(repo, commit, GHCommitState.PENDING, "The review window has not passed");
+    private static void createPendingMessage(GHRepository repo, Ref commit, Duration reviewWindow) {
+        createStatusMessage(repo, commit, GHCommitState.PENDING,
+                "The " + makeHumanReadable(reviewWindow) + " review window has not passed");
     }
 
     private static void createStatusMessage(GHRepository repo, Ref commit, GHCommitState state, String message) {
