@@ -15,7 +15,7 @@
 
   <groupId>com.querydsl.webhooks</groupId>
   <artifactId>gh-review-window</artifactId>
-  <version>0.1.BUILD-SNAPSHOT</version>
+  <version>0.1</version>
   <packaging>jar</packaging>
 
   <url>https://github.com/querydsl/gh-review-window</url>
