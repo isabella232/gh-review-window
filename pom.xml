@@ -23,7 +23,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-    <spring.boot.version>1.2.7.RELEASE</spring.boot.version>
+    <spring.boot.version>1.3.0.RELEASE</spring.boot.version>
 
     <project.checkout>https://github.com/querydsl/gh-review-window</project.checkout>
     <project.githubpage>https://github.com/querydsl/gh-review-window</project.githubpage>
