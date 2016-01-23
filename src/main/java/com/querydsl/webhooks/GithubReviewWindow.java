@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 The Querydsl Team.
+ * Copyright 2016 The Querydsl Team.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,7 @@ public class GithubReviewWindow {
                         .map(environment::getProperty).filter(Objects::nonNull)                     //look for a Duration
                         .findFirst().map(Duration::parse).orElse(defaultReviewWindow);              //if none found, use the default window
 
-                ZonedDateTime creationTime = pullRequest.getCreated_at();
+                ZonedDateTime creationTime = pullRequest.getCreatedAt();
                 ZonedDateTime windowCloseTime = creationTime.plus(reviewTime);
 
                 boolean windowPassed = now().isAfter(windowCloseTime);

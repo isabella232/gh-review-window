@@ -9,6 +9,8 @@
     <version>0.1.0</version>
   </parent>
 
+  <inceptionYear>2015</inceptionYear>
+
   <name>GitHub Review Window</name>
 
   <description>A GitHub Wehook implementation for blocking Pull Requests until the review period has passed</description>
@@ -42,7 +44,7 @@
     <dependency>
       <groupId>com.github.shredder121</groupId>
       <artifactId>gh-event-api</artifactId>
-      <version>0.2</version>
+      <version>0.3</version>
     </dependency>
     <dependency>
       <groupId>org.kohsuke</groupId>
