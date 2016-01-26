@@ -106,4 +106,16 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
+
+  <profiles>
+    <profile>
+      <id>dev</id>
+      <dependencies>
+        <dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-devtools</artifactId>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
 </project>
