@@ -30,6 +30,7 @@ import java.util.concurrent.ScheduledFuture;
 import org.kohsuke.github.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
@@ -65,20 +66,18 @@ public class GithubReviewWindow {
 
     private static final Logger logger = LoggerFactory.getLogger(GithubReviewWindow.class);
 
-    private static final GitHub github;
-
     private final TaskScheduler taskScheduler = new ConcurrentTaskScheduler();
-
-    static {
-        try {
-            github = GitHub.connect();
-        } catch (IOException ex) {
-            throw Throwables.propagate(ex);
-        }
-    }
 
     public static void main(String... args) {
         GHEventApiServer.start(GithubReviewWindow.class, args);
+    }
+
+    @Autowired
+    private GitHub gitHub;
+
+    @Bean
+    public GitHub gitHub() throws IOException {
+        return GitHub.connect();
     }
 
     @Bean
@@ -91,7 +90,7 @@ public class GithubReviewWindow {
             Ref head = pullRequest.getHead();
 
             try {
-                GHRepository repository = github.getRepository(payload.getRepository().getFullName());
+                GHRepository repository = gitHub.getRepository(payload.getRepository().getFullName());
                 Collection<GHLabel> labels = repository.getIssue(pullRequest.getNumber()).getLabels();
 
                 Duration reviewTime = labels.stream().map(label -> "duration." + label.getName())   //for all duration.[label] properties
