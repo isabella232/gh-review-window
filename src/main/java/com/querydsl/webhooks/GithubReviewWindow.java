@@ -26,12 +26,14 @@ import java.util.Date;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
+import java.util.function.Function;
 
 import org.kohsuke.github.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.TaskScheduler;
@@ -61,6 +63,7 @@ import com.google.common.collect.Maps;
  *
  * @author Shredder121
  */
+@EnableCaching
 @SpringBootApplication
 public class GithubReviewWindow {
 
@@ -81,6 +84,11 @@ public class GithubReviewWindow {
     }
 
     @Bean
+    public Function<String, GHRepository> repoQuery() {
+        return new RepositoryQuery(gitHub);
+    }
+
+    @Bean
     public PullRequestHandler reviewWindowHandler(Environment environment) {
         Duration defaultReviewWindow = Duration.parse(environment.getRequiredProperty("duration")); //duration is the default window
         Map<String, ScheduledFuture<?>> asyncTasks = Maps.newConcurrentMap();
@@ -90,7 +98,7 @@ public class GithubReviewWindow {
             Ref head = pullRequest.getHead();
 
             try {
-                GHRepository repository = gitHub.getRepository(payload.getRepository().getFullName());
+                GHRepository repository = repoQuery().apply(payload.getRepository().getFullName());
                 Collection<GHLabel> labels = repository.getIssue(pullRequest.getNumber()).getLabels();
 
                 Duration reviewTime = labels.stream().map(label -> "duration." + label.getName())   //for all duration.[label] properties
