@@ -2,7 +2,7 @@
 
 A GitHub Webhook Implementation
 
-[![Build Status](https://travis-ci.org/querydsl/gh-review-window.svg)](https://travis-ci.org/querydsl/gh-review-window)
+[![Build Status](https://travis-ci.org/querydsl/gh-review-window.svg?branch=master)](https://travis-ci.org/querydsl/gh-review-window)
 
 To run it via Maven and the spring-boot plugin:
 ```sh
