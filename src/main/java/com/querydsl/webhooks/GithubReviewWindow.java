@@ -21,14 +21,15 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Collection;
 import java.util.Date;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
-import org.kohsuke.github.*;
+import org.kohsuke.github.GHCommitState;
+import org.kohsuke.github.GHRepository;
+import org.kohsuke.github.GitHub;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,11 +41,10 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ConcurrentTaskScheduler;
 
 import com.github.shredder121.gh_event_api.GHEventApiServer;
-import com.github.shredder121.gh_event_api.handler.pull_request.*;
+import com.github.shredder121.gh_event_api.handler.pull_request.PullRequestHandler;
 import com.github.shredder121.gh_event_api.model.PullRequest;
 import com.github.shredder121.gh_event_api.model.Ref;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Throwables;
 import com.google.common.collect.Maps;
 
 /**
@@ -78,6 +78,9 @@ public class GithubReviewWindow {
     @Autowired
     private GitHub gitHub;
 
+    @Autowired
+    private Environment environment;
+
     @Bean
     public GitHub gitHub() throws IOException {
         return GitHub.connect();
@@ -89,42 +92,39 @@ public class GithubReviewWindow {
     }
 
     @Bean
-    public PullRequestHandler reviewWindowHandler(Environment environment) {
-        Duration defaultReviewWindow = Duration.parse(environment.getRequiredProperty("duration")); //duration is the default window
+    public BiFunction<GHRepository, Integer, Duration> reviewTimeQuery() {
+        return new ReviewTimeQuery(environment);
+    }
+
+    @Bean
+    public PullRequestHandler reviewWindowHandler() {
         Map<String, ScheduledFuture<?>> asyncTasks = Maps.newConcurrentMap();
 
         return payload -> {
             PullRequest pullRequest = payload.getPullRequest();
             Ref head = pullRequest.getHead();
 
-            try {
-                GHRepository repository = repoQuery().apply(payload.getRepository().getFullName());
-                Collection<GHLabel> labels = repository.getIssue(pullRequest.getNumber()).getLabels();
+            GHRepository repository = repoQuery().apply(payload.getRepository().getFullName());
 
-                Duration reviewTime = labels.stream().map(label -> "duration." + label.getName())   //for all duration.[label] properties
-                        .map(environment::getProperty).filter(Objects::nonNull)                     //look for a Duration
-                        .findFirst().map(Duration::parse).orElse(defaultReviewWindow);              //if none found, use the default window
+            Duration reviewTime = reviewTimeQuery().apply(repository, pullRequest.getNumber());
 
-                ZonedDateTime creationTime = pullRequest.getCreatedAt();
-                ZonedDateTime windowCloseTime = creationTime.plus(reviewTime);
+            ZonedDateTime creationTime = pullRequest.getCreatedAt();
+            ZonedDateTime windowCloseTime = creationTime.plus(reviewTime);
 
-                boolean windowPassed = now().isAfter(windowCloseTime);
-                logger.info("creationTime({}) + reviewTime({}) = windowCloseTime({}), so windowPassed = {}",
-                        creationTime, reviewTime, windowCloseTime, windowPassed);
+            boolean windowPassed = now().isAfter(windowCloseTime);
+            logger.info("creationTime({}) + reviewTime({}) = windowCloseTime({}), so windowPassed = {}",
+                    creationTime, reviewTime, windowCloseTime, windowPassed);
 
-                if (windowPassed) {
-                    completeAndCleanUp(asyncTasks, repository, head);
-                } else {
-                    createPendingMessage(repository, head, reviewTime);
+            if (windowPassed) {
+                completeAndCleanUp(asyncTasks, repository, head);
+            } else {
+                createPendingMessage(repository, head, reviewTime);
 
-                    ScheduledFuture<?> scheduledTask = taskScheduler.schedule(
-                            () -> completeAndCleanUp(asyncTasks, repository, head),
-                            Date.from(windowCloseTime.toInstant()));
+                ScheduledFuture<?> scheduledTask = taskScheduler.schedule(
+                        () -> completeAndCleanUp(asyncTasks, repository, head),
+                        Date.from(windowCloseTime.toInstant()));
 
-                    replaceCompletionTask(asyncTasks, scheduledTask, head);
-                }
-            } catch (IOException ex) {
-                throw Throwables.propagate(ex);
+                replaceCompletionTask(asyncTasks, scheduledTask, head);
             }
         };
     }

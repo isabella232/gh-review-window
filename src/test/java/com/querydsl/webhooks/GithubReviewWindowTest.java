@@ -11,7 +11,6 @@ import org.junit.Test;
 import org.junit.rules.ErrorCollector;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.*;
-import org.springframework.core.env.Environment;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
@@ -63,7 +62,7 @@ public class GithubReviewWindowTest extends GithubReviewWindow {
     }
 
     @Override
-    public PullRequestHandler reviewWindowHandler(Environment environment) {
+    public PullRequestHandler reviewWindowHandler() {
         // Compile time assertion that the handler bean method is invoked
         return payload -> {
             // don't actually handle the payload
