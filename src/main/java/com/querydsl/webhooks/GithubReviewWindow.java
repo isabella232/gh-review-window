@@ -88,7 +88,7 @@ public class GithubReviewWindow {
     @Bean
     @ConditionalOnProperty("startupRepo")
     public ApplicationListener<ContextRefreshedEvent> onStart() {
-        return new StartupRepoProcessor(this, environment, gitHub);
+        return new StartupRepoProcessor(this, environment, repoQuery());
     }
 
     @Bean
