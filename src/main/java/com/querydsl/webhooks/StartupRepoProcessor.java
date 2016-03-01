@@ -46,14 +46,16 @@ public class StartupRepoProcessor implements ApplicationListener<ContextRefreshe
 
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
-        String startupRepo = environment.getProperty("startupRepo", String.class);
-        GHRepository repo = repoQuery.apply(startupRepo);
-        repo.queryPullRequests().state(GHIssueState.OPEN).list()
-                .forEach(pr -> reviewWindow.process(repo,
-                        pr.getNumber(),
-                        creationTime(pr),
-                        pr.getHead().getSha())
-                );
+        String[] startupRepos = environment.getProperty("startupRepos", String[].class);
+        for (String startupRepo : startupRepos) {
+            GHRepository repo = repoQuery.apply(startupRepo);
+            repo.queryPullRequests().state(GHIssueState.OPEN).list()
+                    .forEach(pr -> reviewWindow.process(repo,
+                            pr.getNumber(),
+                            creationTime(pr),
+                            pr.getHead().getSha())
+                    );
+        }
     }
 
     private static ZonedDateTime creationTime(GHPullRequest pr) {

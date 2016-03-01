@@ -21,7 +21,7 @@ Where `OPTIONS` include:
 | duration         | **required** This is the default window duration                           |
 | duration.`LABEL` | Additional durations for specific labels                                   |
 | secret           | The secret that will be used to [compute the HMAC][securing your webhooks] |
-| startupRepo      | Repository to process at startup (to register PRs and attach statuses)     |
+| startupRepos     | Comma separated full repository names to process at startup                |
 
 For the syntax of period strings, see the [`java.time.Duration` javadoc][javadoc duration].
 

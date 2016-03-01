@@ -86,7 +86,7 @@ public class GithubReviewWindow {
     private final Map<String, ScheduledFuture<?>> asyncTasks = Maps.newConcurrentMap();
 
     @Bean
-    @ConditionalOnProperty("startupRepo")
+    @ConditionalOnProperty("startupRepos")
     public ApplicationListener<ContextRefreshedEvent> onStart() {
         return new StartupRepoProcessor(this, environment, repoQuery());
     }
