@@ -13,7 +13,7 @@
 
   <name>GitHub Review Window</name>
 
-  <description>A GitHub Wehook implementation for blocking Pull Requests until the review period has passed</description>
+  <description>A GitHub Webhook implementation for blocking Pull Requests until the review period has passed</description>
 
   <groupId>com.querydsl.webhooks</groupId>
   <artifactId>gh-review-window</artifactId>
