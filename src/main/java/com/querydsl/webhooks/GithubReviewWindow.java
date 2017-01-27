@@ -21,27 +21,32 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Collection;
 import java.util.Date;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
-import org.kohsuke.github.*;
+import org.kohsuke.github.GHCommitState;
+import org.kohsuke.github.GHRepository;
+import org.kohsuke.github.GitHub;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ConcurrentTaskScheduler;
 
 import com.github.shredder121.gh_event_api.GHEventApiServer;
-import com.github.shredder121.gh_event_api.handler.pull_request.*;
+import com.github.shredder121.gh_event_api.handler.pull_request.PullRequestHandler;
 import com.github.shredder121.gh_event_api.model.PullRequest;
-import com.github.shredder121.gh_event_api.model.Ref;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Throwables;
 import com.google.common.collect.Maps;
 
 /**
@@ -60,65 +65,55 @@ import com.google.common.collect.Maps;
  *
  * @author Shredder121
  */
+@EnableCaching
 @SpringBootApplication
 public class GithubReviewWindow {
 
     private static final Logger logger = LoggerFactory.getLogger(GithubReviewWindow.class);
 
-    private static final GitHub github;
-
     private final TaskScheduler taskScheduler = new ConcurrentTaskScheduler();
-
-    static {
-        try {
-            github = GitHub.connect();
-        } catch (IOException ex) {
-            throw Throwables.propagate(ex);
-        }
-    }
 
     public static void main(String... args) {
         GHEventApiServer.start(GithubReviewWindow.class, args);
     }
 
-    @Bean
-    public PullRequestHandler reviewWindowHandler(Environment environment) {
-        Duration defaultReviewWindow = Duration.parse(environment.getRequiredProperty("duration")); //duration is the default window
-        Map<String, ScheduledFuture<?>> asyncTasks = Maps.newConcurrentMap();
+    @Autowired
+    private GitHub gitHub;
 
+    @Autowired
+    private Environment environment;
+
+    private final Map<String, ScheduledFuture<?>> asyncTasks = Maps.newConcurrentMap();
+
+    @Bean
+    @ConditionalOnProperty("startupRepos")
+    public ApplicationListener<ContextRefreshedEvent> onStart() {
+        return new StartupRepoProcessor(this, environment, repoQuery());
+    }
+
+    @Bean
+    public GitHub gitHub() throws IOException {
+        return GitHub.connect();
+    }
+
+    @Bean
+    public Function<String, GHRepository> repoQuery() {
+        return new RepositoryQuery(gitHub);
+    }
+
+    @Bean
+    public BiFunction<GHRepository, Integer, Duration> reviewTimeQuery() {
+        return new ReviewTimeQuery(environment);
+    }
+
+    @Bean
+    public PullRequestHandler reviewWindowHandler() {
         return payload -> {
             PullRequest pullRequest = payload.getPullRequest();
-            Ref head = pullRequest.getHead();
 
-            try {
-                GHRepository repository = github.getRepository(payload.getRepository().getFullName());
-                Collection<GHLabel> labels = repository.getIssue(pullRequest.getNumber()).getLabels();
+            GHRepository repository = repoQuery().apply(payload.getRepository().getFullName());
 
-                Duration reviewTime = labels.stream().map(label -> "duration." + label.getName())   //for all duration.[label] properties
-                        .map(environment::getProperty).filter(Objects::nonNull)                     //look for a Duration
-                        .findFirst().map(Duration::parse).orElse(defaultReviewWindow);              //if none found, use the default window
-
-                ZonedDateTime creationTime = pullRequest.getCreatedAt();
-                ZonedDateTime windowCloseTime = creationTime.plus(reviewTime);
-
-                boolean windowPassed = now().isAfter(windowCloseTime);
-                logger.info("creationTime({}) + reviewTime({}) = windowCloseTime({}), so windowPassed = {}",
-                        creationTime, reviewTime, windowCloseTime, windowPassed);
-
-                if (windowPassed) {
-                    completeAndCleanUp(asyncTasks, repository, head);
-                } else {
-                    createPendingMessage(repository, head, reviewTime);
-
-                    ScheduledFuture<?> scheduledTask = taskScheduler.schedule(
-                            () -> completeAndCleanUp(asyncTasks, repository, head),
-                            Date.from(windowCloseTime.toInstant()));
-
-                    replaceCompletionTask(asyncTasks, scheduledTask, head);
-                }
-            } catch (IOException ex) {
-                throw Throwables.propagate(ex);
-            }
+            process(repository, pullRequest.getNumber(), pullRequest.getCreatedAt(), pullRequest.getHead().getSha());
         };
     }
 
@@ -144,33 +139,55 @@ public class GithubReviewWindow {
         return duration.minus(amount, unit);
     }
 
-    private static void completeAndCleanUp(Map<String, ?> tasks, GHRepository repo, Ref head) {
-        createSuccessMessage(repo, head);
-        tasks.remove(head.getSha());
+    public void process(GHRepository repository, int number, ZonedDateTime creationTime, String sha) {
+        Duration reviewTime = reviewTimeQuery().apply(repository, number);
+
+        ZonedDateTime windowCloseTime = creationTime.plus(reviewTime);
+
+        boolean windowPassed = now().isAfter(windowCloseTime);
+        logger.info("creationTime({}) + reviewTime({}) = windowCloseTime({}), so windowPassed = {}",
+                creationTime, reviewTime, windowCloseTime, windowPassed);
+
+        if (windowPassed) {
+            completeAndCleanUp(asyncTasks, repository, sha);
+        } else {
+            createPendingMessage(repository, sha, reviewTime);
+
+            ScheduledFuture<?> scheduledTask = taskScheduler.schedule(
+                    () -> completeAndCleanUp(asyncTasks, repository, sha),
+                    Date.from(windowCloseTime.toInstant()));
+
+            replaceCompletionTask(asyncTasks, scheduledTask, sha);
+        }
+    }
+
+    private static void completeAndCleanUp(Map<String, ?> tasks, GHRepository repo, String sha) {
+        createSuccessMessage(repo, sha);
+        tasks.remove(sha);
     }
 
     private static void replaceCompletionTask(Map<String, ScheduledFuture<?>> tasks,
-            ScheduledFuture<?> completionTask, Ref head) {
+            ScheduledFuture<?> completionTask, String sha) {
 
         boolean interrupt = false;
-        tasks.merge(head.getSha(), completionTask, (oldTask, newTask) -> {
+        tasks.merge(sha, completionTask, (oldTask, newTask) -> {
             oldTask.cancel(interrupt);
             return newTask;
         });
     }
 
-    private static void createSuccessMessage(GHRepository repo, Ref commit) {
-        createStatusMessage(repo, commit, GHCommitState.SUCCESS, "The review window has passed");
+    private static void createSuccessMessage(GHRepository repo, String sha) {
+        createStatusMessage(repo, sha, GHCommitState.SUCCESS, "The review window has passed");
     }
 
-    private static void createPendingMessage(GHRepository repo, Ref commit, Duration reviewWindow) {
-        createStatusMessage(repo, commit, GHCommitState.PENDING,
+    private static void createPendingMessage(GHRepository repo, String sha, Duration reviewWindow) {
+        createStatusMessage(repo, sha, GHCommitState.PENDING,
                 "The " + makeHumanReadable(reviewWindow) + " review window has not passed");
     }
 
-    private static void createStatusMessage(GHRepository repo, Ref commit, GHCommitState state, String message) {
+    private static void createStatusMessage(GHRepository repo, String sha, GHCommitState state, String message) {
         try {
-            repo.createCommitStatus(commit.getSha(), state, null, message, "review-window");
+            repo.createCommitStatus(sha, state, null, message, "review-window");
         } catch (IOException ex) {
             logger.warn("Exception updating status", ex);
         }
