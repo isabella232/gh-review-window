@@ -9,7 +9,7 @@ To run it via Maven and the spring-boot plugin:
 $ mvn spring-boot:run [OPTIONS]
 ```
 
-To run it on the command line:
+To run it on the regular command line:
 ```sh
 $ java [OPTIONS] -jar gh-review-window-(version)-full.jar
 ```
@@ -25,7 +25,7 @@ Where `OPTIONS` include:
 
 For the syntax of period strings, see the [`java.time.Duration` javadoc][javadoc duration].
 
-This is a subset of Spring Boot's autoconfiguration,
+This is a superset of Spring Boot's autoconfiguration,
 see the list of [common application properties][properties] for other supported configuration options.
 
 Example:
